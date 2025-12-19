@@ -167,11 +167,15 @@ USE p41_mystat_db;
 	ADD CONSTRAINT FK_class_register_notes_student_comment  FOREIGN KEY (student_comment_id) REFERENCES comments (id);
 
 
+
+	--- Не уверен касательно этого момента, ибо стоит вводить такую логику? Думаю, что нет
+	--- #################################################################################################################
 	--ALTER TABLE class_register_notes
-	--DROP CONSTRAINT FK_class_register_notes_student_comment, FK_class_register_notes_teacher_comment;
+	--DROP CONSTRAINT UQ_register_student;
 
-
-
+	--ALTER TABLE class_register_notes
+	--ADD CONSTRAINT UQ_register_student UNIQUE (class_register_id, student_id, teacher_comment_id,  student_comment_id);
+	--- #################################################################################################################
 
 
 
