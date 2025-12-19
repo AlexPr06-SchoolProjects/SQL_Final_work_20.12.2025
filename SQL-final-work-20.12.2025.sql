@@ -150,22 +150,43 @@ USE p41_mystat_db;
 	);
 
 
+	-- Старая логика
+	-- #################################################################################################################
 	--! Возможность добавдения коментария учителем
-	ALTER TABLE class_register_notes
-	-- комента может не быть, поэтому NULL
-	ADD teacher_comment_id int NULL;
+	--ALTER TABLE class_register_notes
+	---- комента может не быть, поэтому NULL
+	--ADD teacher_comment_id int NULL;
+
+	--ALTER TABLE class_register_notes
+	--ADD CONSTRAINT FK_class_register_notes_teacher_comment  FOREIGN KEY (teacher_comment_id) REFERENCES comments (id);
+
+	----! Возможность добавдения коментария учеником
+	--ALTER TABLE class_register_notes
+	---- комента может не быть, поэтому NULL
+	--ADD student_comment_id int NULL;
+
+	--ALTER TABLE class_register_notes
+	--ADD CONSTRAINT FK_class_register_notes_student_comment  FOREIGN KEY (student_comment_id) REFERENCES comments (id);
+	-- #################################################################################################################
+
+	-- Новая логика
+	--#################################################################################################################
 
 	ALTER TABLE class_register_notes
-	ADD CONSTRAINT FK_class_register_notes_teacher_comment  FOREIGN KEY (teacher_comment_id) REFERENCES comments (id);
-
-	--! Возможность добавдения коментария учеником
-	ALTER TABLE class_register_notes
-	-- комента может не быть, поэтому NULL
-	ADD student_comment_id int NULL;
+	DROP CONSTRAINT FK_class_register_notes_student_comment, FK_class_register_notes_teacher_comment;
 
 	ALTER TABLE class_register_notes
-	ADD CONSTRAINT FK_class_register_notes_student_comment  FOREIGN KEY (student_comment_id) REFERENCES comments (id);
+	DROP COLUMN teacher_comment_id, student_comment_id;
 
+	CREATE TABLE class_register_notes_comments (
+		comment_id int UNIQUE NOT NULL,
+		class_register_notes_id int NOT NULL, -- НО НЕ UNIQUE! Значит, может быть больше одного коммментария
+
+		CONSTRAINT FK_class_register_notes_comment_id FOREIGN KEY (comment_id) REFERENCES comments (id),
+		CONSTRAINT FK_class_register_note_id FOREIGN KEY (class_register_notes_id) REFERENCES class_register_notes (id),
+	);
+
+	--#################################################################################################################
 
 
 	--- Не уверен касательно этого момента, ибо стоит вводить такую логику? Думаю, что нет
