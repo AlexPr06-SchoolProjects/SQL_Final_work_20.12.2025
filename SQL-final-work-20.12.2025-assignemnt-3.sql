@@ -125,9 +125,18 @@ WHERE EXISTS (
 
 
 -- В таблицах все значения NOT NULL, проверка на NULL не нужна
-DECLARE @some_id_of_user int = 11;
 
-WITH 
+-- Достаточно создать один раз, но чтобы не было ошибок, если по случайности
+-- функция создается еще раз, добавлена проверка на удаление и потворное создание
+IF OBJECT_ID('dbo.fn_GetUserMonthlyBalance', 'IF') IS NOT NULL
+    DROP FUNCTION dbo.fn_GetUserMonthlyBalance;
+GO
+
+CREATE FUNCTION dbo.fn_GetUserMonthlyBalance (@target_user_id INT)
+RETURNS TABLE 
+AS 
+RETURN (
+    WITH 
     -- Месяц - количество дней(без повторений)
     months_days_cte AS (
         SELECT
@@ -145,7 +154,7 @@ WITH
         FROM user_accounts u_a
         JOIN transactions t 
             ON u_a.id = t.account_from
-        WHERE @some_id_of_user = u_a.user_id
+        WHERE @target_user_id = u_a.user_id
         GROUP BY MONTH(t.trdate)
     ),
 
@@ -157,18 +166,63 @@ WITH
         FROM user_accounts u_a
         JOIN transactions t 
             ON u_a.id = t.account_to
-        WHERE @some_id_of_user = u_a.user_id
+        WHERE @target_user_id = u_a.user_id
         GROUP BY MONTH(t.trdate)
     )
 
-SELECT 
-    mdc.month_number                   AS [month],
-    ISNULL(atdc.counted_amount, 0)     AS [incoming_amount],
-    ISNULL(afdc.counted_amount, 0)     AS [outcoming_amount],
-    mdc.counted_days                   AS [days_count]
-FROM months_days_cte mdc
-LEFT JOIN accounts_to_data_cte   atdc ON mdc.month_number = atdc.month_number
-LEFT JOIN accounts_from_data_cte afdc ON mdc.month_number = afdc.month_number;
+    SELECT 
+        FORMAT(DATEFROMPARTS(2024, mdc.month_number, 1), 'MMMM')    AS [month],
+        ISNULL(atdc.counted_amount, 0)                              AS [incoming_amount],   -- Так как я делаю LEFT JOIN - поля могут быть NULL
+        ISNULL(afdc.counted_amount, 0)                              AS [outcoming_amount],  -- Так как я делаю LEFT JOIN - поля могут быть NULL
+        mdc.counted_days                                            AS [days_count]
+    FROM months_days_cte mdc
+    LEFT JOIN accounts_to_data_cte   atdc ON mdc.month_number = atdc.month_number
+    LEFT JOIN accounts_from_data_cte afdc ON mdc.month_number = afdc.month_number
+);
+GO
+
+DECLARE @some_id_of_user int = 11;
+SELECT * FROM dbo.fn_GetUserMonthlyBalance(@some_id_of_user);
 
 
+-- 2.3* (по желанию.. для тех, кому было легко 😉) На основе предыдущего запроса выгрузить в отдельную таблицу 
+-- (создайте дополнительно) результат анализа месячного баланса (по каждому месяцу) по определённому пользователю.
+-- Под месячным балансом понимается сумма всех входящих транзакций по всем счетам пользователя минус сумма всех 
+-- исходящих транзакций по всем счетам пользователя за календарный месяц.
+-- Баланс может быть отрицательным.
+-- Для отчёта создайте отдельную таблицу
 
+-- Создаем таблицу
+IF OBJECT_ID('dbo.month_balances', 'U') IS NULL
+BEGIN
+    CREATE TABLE month_balances (
+        id int PRIMARY KEY IDENTITY(1, 1),
+        user_id int NOT NULL,
+        month_number nvarchar(12) NOT NULL,
+        balance int NOT NULL,
+        days_count int NULL
+
+        CONSTRAINT FK_month_balances_user FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+END
+
+
+-- Вводим пользователя на основе предыдущего задания
+DECLARE @certain_user_id int = 11;
+
+INSERT INTO month_balances (user_id, month_number, balance, days_count)
+SELECT     
+    @certain_user_id,
+    [month], 
+    ([incoming_amount] - [outcoming_amount]), 
+    [days_count]
+FROM fn_GetUserMonthlyBalance(@certain_user_id);
+
+
+-- Проверяем наш ввод
+SELECT * FROM month_balances;
+
+
+-- Если вдруг для проверки нужно будет
+DELETE FROM month_balances
+WHERE user_id = @certain_user_id;
